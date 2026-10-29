@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADEU LLM</title>
+  <meta name="description" content="ADEU LLM im Browser – Chat, Agent und Dateien mit der Uni-LLM-API der TU Dresden">
+  <link rel="icon" href="icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/purify.min.js"></script>
+  <script src="vendor/jszip.min.js"></script>
+  <script src="vendor/pdf.min.js"></script>
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div id="app" class="app">
+    <aside id="sidebar" class="sidebar">
+      <div class="brand">
+        <img src="icon.png" alt="" width="32" height="32">
+        <span>ADEU LLM</span>
+        <button id="closeSidebar" class="icon only-mobile" title="Seitenleiste schließen" aria-label="Seitenleiste schließen">✕</button>
+      </div>
+      <button id="newChat" class="primary wide">＋ Neuer Chat</button>
+      <div class="group-head">
+        <span>Projekte</span>
+        <button id="newProject" class="icon" title="Neues Projekt" aria-label="Neues Projekt">＋</button>
+      </div>
+      <p class="hint small">Ein Projekt bündelt Chats zu einem Thema – mit Anweisungen und einem Projektordner auf dem Rechner.</p>
+      <ul id="projects" class="list"></ul>
+      <div class="group-head"><span>Chats</span></div>
+      <ul id="chats" class="list grow"></ul>
+      <button id="openSettings" class="ghost wide">⚙ Einstellungen</button>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button id="openSidebar" class="icon only-mobile" title="Seitenleiste" aria-label="Seitenleiste öffnen">☰</button>
+        <div class="title-block">
+          <div id="chatTitle" class="chat-title">Neuer Chat</div>
+          <div id="chatMeta" class="hint small"></div>
+        </div>
+        <select id="model" title="Modell"></select>
+        <button id="chatMenu" class="icon" title="Chat exportieren oder löschen" aria-label="Chat-Menü">⋮</button>
+        <div id="chatMenuPop" class="menu" hidden>
+          <button data-act="export-md">Als Markdown speichern</button>
+          <button data-act="rename">Umbenennen</button>
+          <button data-act="move">In Projekt verschieben …</button>
+          <button data-act="delete" class="danger">Chat löschen</button>
+        </div>
+      </header>
+
+      <section id="messages" class="messages" aria-live="polite">
+        <div id="welcome" class="welcome">
+          <img src="icon.png" alt="" width="64" height="64">
+          <h1 id="greeting">Wie kann ich helfen?</h1>
+          <p class="hint">Browserversion von ADEU LLM: Chat mit den Modellen des Uni-Servers, eigene Dateien (PDF, Word, PowerPoint, Excel),
+            und – in Chrome oder Edge – ein Projektordner auf diesem Rechner, in dessen Unterordner „Ausgabe“ die KI Dateien schreibt.</p>
+          <div id="starters" class="starters"></div>
+        </div>
+      </section>
+
+      <footer class="composer">
+        <div id="banner" class="banner" hidden></div>
+        <div id="attachments" class="chips"></div>
+        <div class="input-row">
+          <button id="attach" class="icon" title="Dateien anhängen (PDF, Word, PowerPoint, Excel, Text, Bilder)" aria-label="Dateien anhängen">📎</button>
+          <input id="fileInput" type="file" multiple hidden>
+          <textarea id="input" rows="1" placeholder="Nachricht an ADEU LLM … (Enter senden, Umschalt+Enter neue Zeile)"></textarea>
+          <button id="send" class="primary" title="Senden">Senden</button>
+          <button id="stop" class="danger" title="Anhalten" hidden>Stopp</button>
+        </div>
+        <div class="status-row">
+          <span id="folderStatus" class="hint small"></span>
+          <span class="hint small">ADEU LLM nutzt KI und kann Fehler machen. Wichtiges bitte prüfen.</span>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <dialog id="settingsDialog" class="dialog">
+    <form method="dialog" class="dialog-body">
+      <h2>Einstellungen</h2>
+      <label>API-Schlüssel (TU-Dresden-Self-Service)
+        <input id="apiKey" type="password" autocomplete="off" placeholder="sk-…">
+      </label>
+      <p class="hint small">Der Schlüssel bleibt in diesem Browser (lokaler Speicher) und geht nur an den eingetragenen Server.</p>
+      <label>Server
+        <input id="baseUrl" type="url" placeholder="https://llm.scads.ai/v1">
+      </label>
+      <label>Ihr Vorname (für die Begrüßung, optional)
+        <input id="userName" type="text">
+      </label>
+      <label>Absenderangaben (für Briefe und E-Mails)
+        <textarea id="senderInfo" rows="3" placeholder="Name, Funktion, Telefon, E-Mail, Raum – je Zeile eine Angabe"></textarea>
+      </label>
+      <label>Gedächtnis – was die KI über Sie wissen soll (je Zeile ein Eintrag)
+        <textarea id="memory" rows="4" placeholder="z.B. Unterrichtet Allgemeine Didaktik im Master Lehramt"></textarea>
+      </label>
+      <fieldset>
+        <legend>Standard-Ordner (für Chats ohne Projekt)</legend>
+        <p id="defaultFolderInfo" class="hint small"></p>
+        <div class="row">
+          <button type="button" id="pickDefaultFolder">Ordner wählen …</button>
+          <button type="button" id="clearDefaultFolder" class="ghost">Entfernen</button>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Daten</legend>
+        <div class="row">
+          <button type="button" id="exportData">Sicherung herunterladen</button>
+          <button type="button" id="importData" class="ghost">Sicherung einspielen …</button>
+          <input id="importFile" type="file" accept=".json,application/json" hidden>
+        </div>
+        <p class="hint small">Chats und Projekte liegen nur in diesem Browser. Ordner werden nicht mitgesichert – sie lassen sich im Projekt neu wählen.</p>
+      </fieldset>
+      <div class="actions">
+        <button value="cancel" class="ghost">Abbrechen</button>
+        <button id="saveSettings" value="ok" class="primary">Speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="projectDialog" class="dialog">
+    <form method="dialog" class="dialog-body">
+      <h2 id="projectDialogTitle">Projekt</h2>
+      <label>Name <input id="projectName" type="text"></label>
+      <label>Anweisungen für alle Chats im Projekt
+        <textarea id="projectInstructions" rows="4" placeholder="z.B. Es geht um das Seminar Classroom Management im WS 2026/27, Zielgruppe Lehramt Gymnasium."></textarea>
+      </label>
+      <fieldset>
+        <legend>Projektordner</legend>
+        <p class="hint small">Ein Ordner auf diesem Rechner – z. B. in Google Drive, OneDrive, Nextcloud oder auf einem Netzlaufwerk.
+          Was die KI in diesem Projekt erstellt (Word, Excel, Markdown, Text …), landet dort im Unterordner „Ausgabe“.</p>
+        <p id="projectFolderInfo" class="hint small"></p>
+        <div class="row">
+          <button type="button" id="pickProjectFolder">Ordner wählen …</button>
+          <button type="button" id="clearProjectFolder" class="ghost">Entfernen</button>
+        </div>
+        <label class="check"><input id="projectReadFiles" type="checkbox" checked> KI darf die Dateien im Ordner lesen
+          <span class="hint small">– sie sieht, was dort liegt, und bezieht passende Dateien ein. Aus: nur „Ausgabe“.</span></label>
+      </fieldset>
+      <div class="actions">
+        <button type="button" id="deleteProject" class="danger ghost">Projekt löschen</button>
+        <span class="grow"></span>
+        <button value="cancel" class="ghost">Abbrechen</button>
+        <button id="saveProject" value="ok" class="primary">Speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="moveDialog" class="dialog">
+    <form method="dialog" class="dialog-body">
+      <h2>In Projekt verschieben</h2>
+      <select id="moveTarget"></select>
+      <div class="actions">
+        <button value="cancel" class="ghost">Abbrechen</button>
+        <button value="ok" class="primary">Verschieben</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
